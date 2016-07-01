@@ -803,8 +803,8 @@ extern {}
 #[cfg(not(target_os = "windows"))]
 #[link(name = "pcap")]
 extern {
-    // pub fn pcap_inject(arg1: *mut pcap_t, arg2: *const ::libc::c_void,
-    //                    arg3: size_t) -> ::libc::c_int;
+    pub fn pcap_inject(arg1: *mut pcap_t, arg2: *const ::libc::c_void,
+                       arg3: size_t) -> ::libc::c_int;
 
     pub fn pcap_set_rfmon(arg1: *mut pcap_t, arg2: ::libc::c_int)
      -> ::libc::c_int;
