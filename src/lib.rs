@@ -48,10 +48,11 @@
 
 extern crate libc;
 
+use std::mem;
 use unique::Unique;
 use std::marker::PhantomData;
 use std::ptr;
-use std::ffi::{CStr,CString};
+use std::ffi::{CStr, CString};
 use std::path::Path;
 use std::slice;
 use std::ops::Deref;
@@ -92,26 +93,16 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             MalformedError(e) => {
-                write!(f, "pcap returned a string that was not encoded properly: {}", e)
-            },
-            InvalidString => {
-                write!(f, "pcap returned an invalid (null) string")
-            },
-            PcapError(ref e) => {
-                write!(f, "pcap error: {}", e)
-            },
-            InvalidLinktype => {
-                write!(f, "invalid or unknown linktype")
-            },
-            TimeoutExpired => {
-               write!(f, "timeout expired")
-            },
-            NoMorePackets => {
-               write!(f, "no more packets to read from the file")
-            },
-            InsufficientMemory => {
-                write!(f, "insufficient memory")
-            },
+                write!(f,
+                       "pcap returned a string that was not encoded properly: {}",
+                       e)
+            }
+            InvalidString => write!(f, "pcap returned an invalid (null) string"),
+            PcapError(ref e) => write!(f, "pcap error: {}", e),
+            InvalidLinktype => write!(f, "invalid or unknown linktype"),
+            TimeoutExpired => write!(f, "timeout expired"),
+            NoMorePackets => write!(f, "no more packets to read from the file"),
+            InsufficientMemory => write!(f, "insufficient memory"),
         }
     }
 }
@@ -132,7 +123,7 @@ impl std::error::Error for Error {
     fn cause(&self) -> Option<&std::error::Error> {
         match *self {
             MalformedError(ref e) => Some(e),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -147,7 +138,7 @@ impl From<str::Utf8Error> for Error {
 /// A network device name and (potentially) pcap's description of it.
 pub struct Device {
     pub name: String,
-    pub desc: Option<String>
+    pub desc: Option<String>,
 }
 
 impl Device {
@@ -170,7 +161,7 @@ impl Device {
 
             Ok(Device {
                 name: try!(cstr_to_string(default_name)),
-                desc: None
+                desc: None,
             })
         }
     }
@@ -195,7 +186,7 @@ impl Device {
                                 } else {
                                     None
                                 }
-                            }
+                            },
                         });
 
                         cur = (&*cur).next;
@@ -204,10 +195,8 @@ impl Device {
                     raw::pcap_freealldevs(dev_buf);
 
                     Ok(ret)
-                },
-                _ => {
-                    Error::new(errbuf.as_ptr() as *mut _)
                 }
+                _ => Error::new(errbuf.as_ptr() as *mut _),
             }
         }
     }
@@ -217,7 +206,7 @@ impl<'a> Into<Device> for &'a str {
     fn into(self) -> Device {
         Device {
             name: self.into(),
-            desc: None
+            desc: None,
         }
     }
 }
@@ -236,7 +225,7 @@ impl Linktype {
             let name = raw::pcap_datalink_val_to_name(self.0);
 
             if name.is_null() {
-                return Err(InvalidLinktype)
+                return Err(InvalidLinktype);
             } else {
                 Ok(try!(cstr_to_string(name)))
             }
@@ -249,7 +238,7 @@ impl Linktype {
             let description = raw::pcap_datalink_val_to_description(self.0);
 
             if description.is_null() {
-                return Err(InvalidLinktype)
+                return Err(InvalidLinktype);
             } else {
                 Ok(try!(cstr_to_string(description)))
             }
@@ -261,11 +250,11 @@ impl Linktype {
 #[derive(Debug)]
 pub struct Packet<'a> {
     pub header: &'a PacketHeader,
-    pub data: &'a [u8]
+    pub data: &'a [u8],
 }
 
 impl<'b> Deref for Packet<'b> {
-   type Target = [u8];
+    type Target = [u8];
 
     fn deref(&self) -> &[u8] {
         self.data
@@ -276,7 +265,7 @@ impl<'b> Deref for Packet<'b> {
 pub struct Stat {
     pub received: u32,
     pub dropped: u32,
-    pub if_dropped: u32
+    pub if_dropped: u32,
 }
 
 pub enum Precision {
@@ -346,7 +335,7 @@ unsafe impl State for Dead {}
 /// ```
 pub struct Capture<T: State + ?Sized> {
     handle: Unique<raw::pcap_t>,
-    _marker: PhantomData<T>
+    _marker: PhantomData<T>,
 }
 
 impl Capture<Offline> {
@@ -363,29 +352,34 @@ impl Capture<Offline> {
 
             Ok(Capture {
                 handle: Unique::new(handle),
-                _marker: PhantomData
+                _marker: PhantomData,
             })
         }
     }
 
     /// Opens an offline capture handle from a pcap dump file, given a path.
     /// Takes an additional precision argument specifying the time stamp precision desired.
-    pub fn from_file_with_precision<P: AsRef<Path>>(path: P, precision: Precision) -> Result<Capture<Offline>, Error> {
+    pub fn from_file_with_precision<P: AsRef<Path>>(path: P,
+                                                    precision: Precision)
+                                                    -> Result<Capture<Offline>, Error> {
         let name = CString::new(path.as_ref().to_str().unwrap()).unwrap();
         let mut errbuf = [0i8; PCAP_ERRBUF_SIZE];
 
         unsafe {
-            let handle = raw::pcap_open_offline_with_tstamp_precision(name.as_ptr(), match precision {
-                Precision::Micro => 0,
-                Precision::Nano => 1,
-            }, errbuf.as_mut_ptr() as *mut _);
+            let handle =
+                raw::pcap_open_offline_with_tstamp_precision(name.as_ptr(),
+                                                             match precision {
+                                                                 Precision::Micro => 0,
+                                                                 Precision::Nano => 1,
+                                                             },
+                                                             errbuf.as_mut_ptr() as *mut _);
             if handle.is_null() {
                 return Error::new(errbuf.as_ptr() as *const _);
             }
 
             Ok(Capture {
                 handle: Unique::new(handle),
-                _marker: PhantomData
+                _marker: PhantomData,
             })
         }
     }
@@ -421,7 +415,7 @@ impl Capture<Inactive> {
 
             Ok(Capture {
                 handle: Unique::new(handle),
-                _marker: PhantomData
+                _marker: PhantomData,
             })
         }
     }
@@ -453,13 +447,14 @@ impl Capture<Inactive> {
     #[cfg(not(windows))]
     pub fn tstamp_type(self, t: TstampType) -> Capture<Inactive> {
         unsafe {
-            raw::pcap_set_tstamp_type(*self.handle, match t {
-                TstampType::Host => 0,
-                TstampType::HostLowPrec => 1,
-                TstampType::HostHighPrec => 2,
-                TstampType::Adapter => 3,
-                TstampType::AdapterUnsynced => 4,
-            });
+            raw::pcap_set_tstamp_type(*self.handle,
+                                      match t {
+                                          TstampType::Host => 0,
+                                          TstampType::HostLowPrec => 1,
+                                          TstampType::HostHighPrec => 2,
+                                          TstampType::Adapter => 3,
+                                          TstampType::AdapterUnsynced => 4,
+                                      });
             self
         }
     }
@@ -467,7 +462,12 @@ impl Capture<Inactive> {
     /// Set promiscuous mode on or off. By default, this is off.
     pub fn promisc(self, to: bool) -> Capture<Inactive> {
         unsafe {
-            raw::pcap_set_promisc(*self.handle, if to {1} else {0});
+            raw::pcap_set_promisc(*self.handle,
+                                  if to {
+                                      1
+                                  } else {
+                                      0
+                                  });
             self
         }
     }
@@ -478,7 +478,21 @@ impl Capture<Inactive> {
     #[cfg(not(target_os = "windows"))]
     pub fn rfmon(self, to: bool) -> Capture<Inactive> {
         unsafe {
-            raw::pcap_set_rfmon(*self.handle, if to {1} else {0});
+            raw::pcap_set_rfmon(*self.handle,
+                                if to {
+                                    1
+                                } else {
+                                    0
+                                });
+            self
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn inject(self, data: &[u8], len: usize) -> Capture<Inactive> {
+        unsafe {
+            let state_ptr = data.as_ptr() as *const libc::c_void;
+            raw::pcap_inject(*self.handle, state_ptr, len);
             self
         }
     }
@@ -497,10 +511,11 @@ impl Capture<Inactive> {
     #[cfg(not(windows))]
     pub fn precision(self, precision: Precision) -> Capture<Inactive> {
         unsafe {
-            raw::pcap_set_tstamp_precision(*self.handle, match precision {
-                Precision::Micro => 0,
-                Precision::Nano => 1,
-            });
+            raw::pcap_set_tstamp_precision(*self.handle,
+                                           match precision {
+                                               Precision::Micro => 0,
+                                               Precision::Nano => 1,
+                                           });
             self
         }
     }
@@ -517,7 +532,7 @@ impl Capture<Inactive> {
     }
 }
 
-///# Activated captures include `Capture<Active>` and `Capture<Offline>`.
+/// # Activated captures include `Capture<Active>` and `Capture<Offline>`.
 impl<T: Activated + ?Sized> Capture<T> {
     /// List the datalink types that this captured device supports.
     pub fn list_datalinks(&self) -> Result<Vec<Linktype>, Error> {
@@ -528,12 +543,16 @@ impl<T: Activated + ?Sized> Capture<T> {
 
             if num == PCAP_ERROR_NOT_ACTIVATED {
                 raw::pcap_free_datalinks(links);
-                panic!("It should not be possible to run list_datalinks on a Capture that is not activated, please report this bug!")
+                panic!("It should not be possible to run list_datalinks on a Capture that is not \
+                        activated, please report this bug!")
             } else if num < 0 {
                 raw::pcap_free_datalinks(links);
                 Error::new(raw::pcap_geterr(*self.handle))
             } else {
-                let slice = slice::from_raw_parts(links, num as usize).iter().map(|&a| Linktype(a)).collect();
+                let slice = slice::from_raw_parts(links, num as usize)
+                    .iter()
+                    .map(|&a| Linktype(a))
+                    .collect();
                 raw::pcap_free_datalinks(links);
 
                 Ok(slice)
@@ -545,12 +564,8 @@ impl<T: Activated + ?Sized> Capture<T> {
     pub fn set_datalink(&mut self, linktype: Linktype) -> Result<(), Error> {
         unsafe {
             match raw::pcap_set_datalink(*self.handle, linktype.0) {
-                0 => {
-                    Ok(())
-                },
-                _ => {
-                    Error::new(raw::pcap_geterr(*self.handle))
-                }
+                0 => Ok(()),
+                _ => Error::new(raw::pcap_geterr(*self.handle)),
             }
         }
     }
@@ -560,11 +575,10 @@ impl<T: Activated + ?Sized> Capture<T> {
         unsafe {
             match raw::pcap_datalink(*self.handle) {
                 PCAP_ERROR_NOT_ACTIVATED => {
-                    panic!("It should not be possible to run get_datalink on a Capture that is not activated, please report this bug!");
-                },
-                lt => {
-                    Linktype(lt)
+                    panic!("It should not be possible to run get_datalink on a Capture that is \
+                            not activated, please report this bug!");
                 }
+                lt => Linktype(lt),
             }
         }
     }
@@ -579,9 +593,7 @@ impl<T: Activated + ?Sized> Capture<T> {
             if handle.is_null() {
                 Error::new(raw::pcap_geterr(*self.handle))
             } else {
-                Ok(Savefile {
-                    handle: Unique::new(handle)
-                })
+                Ok(Savefile { handle: Unique::new(handle) })
             }
         }
     }
@@ -589,16 +601,17 @@ impl<T: Activated + ?Sized> Capture<T> {
     /// Set the direction of the capture
     pub fn direction(&self, direction: Direction) -> Result<(), Error> {
         let result = unsafe {
-            raw::pcap_setdirection(*self.handle, match direction {
-                Direction::InOut => raw::PCAP_D_INOUT,
-                Direction::In => raw::PCAP_D_IN,
-                Direction::Out => raw::PCAP_D_OUT,
-            })
+            raw::pcap_setdirection(*self.handle,
+                                   match direction {
+                                       Direction::InOut => raw::PCAP_D_INOUT,
+                                       Direction::In => raw::PCAP_D_IN,
+                                       Direction::Out => raw::PCAP_D_OUT,
+                                   })
         };
         if result == 0 {
             Ok(())
         } else {
-            Error::new( unsafe { raw::pcap_geterr(*self.handle) })
+            Error::new(unsafe { raw::pcap_geterr(*self.handle) })
         }
     }
 
@@ -617,23 +630,23 @@ impl<T: Activated + ?Sized> Capture<T> {
                     // packet was read without issue
                     Ok(Packet {
                         header: transmute(&*header),
-                        data: slice::from_raw_parts(packet, (&*header).caplen as usize)
+                        data: slice::from_raw_parts(packet, (&*header).caplen as usize),
                     })
-                },
+                }
                 0 => {
                     // packets are being read from a live capture and the
                     // timeout expired
                     Err(TimeoutExpired)
-                },
+                }
                 -1 => {
                     // an error occured while reading the packet
                     Error::new(raw::pcap_geterr(*self.handle))
-                },
+                }
                 -2 => {
                     // packets are being read from a "savefile" and there are no
                     // more packets to read
                     Err(NoMorePackets)
-                },
+                }
                 _ => {
                     // libpcap only defines codes >=1, 0, -1, and -2
                     unreachable!()
@@ -668,8 +681,11 @@ impl<T: Activated + ?Sized> Capture<T> {
 
     pub fn stats(&mut self) -> Result<Stat, Error> {
         unsafe {
-            let mut stats: raw::Struct_pcap_stat =
-                raw::Struct_pcap_stat {ps_recv: 0, ps_drop: 0, ps_ifdrop: 0};
+            let mut stats: raw::Struct_pcap_stat = raw::Struct_pcap_stat {
+                ps_recv: 0,
+                ps_drop: 0,
+                ps_ifdrop: 0,
+            };
 
             if -1 == raw::pcap_stats(*self.handle, &mut stats) {
                 return Error::new(raw::pcap_geterr(*self.handle));
@@ -678,7 +694,7 @@ impl<T: Activated + ?Sized> Capture<T> {
             Ok(Stat {
                 received: stats.ps_recv,
                 dropped: stats.ps_drop,
-                if_dropped: stats.ps_ifdrop
+                if_dropped: stats.ps_ifdrop,
             })
         }
     }
@@ -688,15 +704,14 @@ impl Capture<Active> {
     /// Sends a packet over this capture handle's interface.
     pub fn sendpacket<'a>(&mut self, buf: &'a [u8]) -> Result<(), Error> {
         unsafe {
-            let result = raw::pcap_sendpacket(*self.handle, buf.as_ptr() as *const _, buf.len() as i32);
+            let result =
+                raw::pcap_sendpacket(*self.handle, buf.as_ptr() as *const _, buf.len() as i32);
 
             match result {
                 -1 => {
                     return Error::new(raw::pcap_geterr(*self.handle));
-                },
-                _ => {
-                    Ok(())
                 }
+                _ => Ok(()),
             }
         }
     }
@@ -713,7 +728,7 @@ impl Capture<Dead> {
 
             Ok(Capture {
                 handle: Unique::new(handle),
-                _marker: PhantomData
+                _marker: PhantomData,
             })
         }
     }
@@ -728,10 +743,8 @@ impl AsRawFd for Capture<Active> {
             match fd {
                 -1 => {
                     panic!("Unable to get file descriptor for live capture");
-                },
-                fd => {
-                    fd
                 }
+                fd => fd,
             }
         }
     }
@@ -739,9 +752,7 @@ impl AsRawFd for Capture<Active> {
 
 impl<T: State + ?Sized> Drop for Capture<T> {
     fn drop(&mut self) {
-        unsafe {
-            raw::pcap_close(*self.handle)
-        }
+        unsafe { raw::pcap_close(*self.handle) }
     }
 }
 
@@ -753,13 +764,15 @@ impl<T: Activated> From<Capture<T>> for Capture<Activated> {
 
 /// Abstraction for writing pcap savefiles, which can be read afterwards via `Capture::from_file()`.
 pub struct Savefile {
-    handle: Unique<raw::pcap_dumper_t>
+    handle: Unique<raw::pcap_dumper_t>,
 }
 
 impl Savefile {
     pub fn write<'a>(&mut self, packet: &'a Packet<'a>) {
         unsafe {
-            raw::pcap_dump(*self.handle as *mut u8, transmute::<_, &raw::Struct_pcap_pkthdr>(packet.header), packet.data.as_ptr());
+            raw::pcap_dump(*self.handle as *mut u8,
+                           transmute::<_, &raw::Struct_pcap_pkthdr>(packet.header),
+                           packet.data.as_ptr());
         }
     }
 }
@@ -777,6 +790,6 @@ fn cstr_to_string(ptr: *const libc::c_char) -> Result<String, Error> {
     if ptr.is_null() {
         Err(InvalidString)
     } else {
-        Ok(try!(str::from_utf8(unsafe{CStr::from_ptr(ptr)}.to_bytes())).into())
+        Ok(try!(str::from_utf8(unsafe { CStr::from_ptr(ptr) }.to_bytes())).into())
     }
 }

@@ -9,11 +9,14 @@ pub struct Unique<T: ?Sized> {
     pointer: *const T,
     _marker: PhantomData<T>,
 }
-unsafe impl<T: Send + ?Sized> Send for Unique<T> { }
-unsafe impl<T: Sync + ?Sized> Sync for Unique<T> { }
+unsafe impl<T: Send + ?Sized> Send for Unique<T> {}
+unsafe impl<T: Sync + ?Sized> Sync for Unique<T> {}
 impl<T: ?Sized> Unique<T> {
     pub unsafe fn new(ptr: *mut T) -> Unique<T> {
-        Unique { pointer: ptr, _marker: PhantomData }
+        Unique {
+            pointer: ptr,
+            _marker: PhantomData,
+        }
     }
     pub unsafe fn get(&self) -> &T {
         &*self.pointer
@@ -23,7 +26,7 @@ impl<T: ?Sized> Unique<T> {
     }
 }
 
-impl<T:?Sized> Deref for Unique<T> {
+impl<T: ?Sized> Deref for Unique<T> {
     type Target = *mut T;
 
     #[inline]
